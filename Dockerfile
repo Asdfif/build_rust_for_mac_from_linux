@@ -1,16 +1,18 @@
 # steps:
 # docker build -t my-rust-app . && \
 # docker create --name temp-container my-rust-app && \
-# docker cp temp-container:/usr/src/myapp/target/aarch64-apple-darwin/release/test_proj /path/to/file/test_proj && \
-# docker rm temp-container
+# docker cp temp-container:/usr/src/myapp/target/aarch64-apple-darwin/release/test_proj ./ && \
+# docker rm temp-container && \
+# ./test_proj
 
 # Используем официальный образ Rust в качестве базового
 FROM rust:latest
 
-# Устанавливаем необходимые инструменты для Zig
+# Устанавливаем необходимые зависимости
 RUN apt-get update && apt-get install -y \
-    curl \
     build-essential \
+    curl \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Устанавливаем Zig
@@ -30,11 +32,18 @@ RUN rustup target add aarch64-apple-darwin
 
 RUN cargo install --locked cargo-zigbuild
 
+# Копируем macOS SDK
+RUN wget https://github.com/alexey-lysiuk/macos-sdk/releases/download/14.5/MacOSX14.5.tar.xz
+RUN mkdir /opt/macos-sdk && tar -xf MacOSX14.5.tar.xz -C /opt/macos-sdk
+RUN rm MacOSX14.5.tar.xz
+
+# Устанавливаем переменные окружения для SDK
+ENV SDKROOT=/opt/macos-sdk/MacOSX14.5.sdk
+ENV CFLAGS="-isysroot $SDKROOT"
+ENV LDFLAGS="-isysroot $SDKROOT"
+
 # Копируем весь остальной исходный код проекта в контейнер
 COPY . .
 
 # Собираем проект
 RUN cargo zigbuild --release --target aarch64-apple-darwin
-
-# Указываем команду для запуска
-CMD ["cargo", "run", "--release"]
